@@ -54,7 +54,7 @@ def load_and_process_data():
         return None, None
 
     combined_knowledge = "\n\n---\n\n".join(knowledge_base_texts)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
     texts = text_splitter.split_text(combined_knowledge)
     return texts, reviews_df
 
