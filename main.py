@@ -1,5 +1,4 @@
 # --- THE DEFINITIVE SQLITE3 FIX ---
-# This code MUST be at the very top of the file
 try:
     __import__('pysqlite3')
     import sys
@@ -22,7 +21,7 @@ from langchain.retrievers.document_compressors import LLMChainExtractor
 
 # --- App Configuration ---
 st.set_page_config(page_title="Hotel Strategy AI", page_icon="🏨", layout="wide")
-st.title("🏨 Premium Hotel Strategy AI")
+st.title("Hotel Review and Research Strategy recommendation")
 st.write("This tool synthesizes expert research and customer reviews to generate strategic recommendations.")
 
 # --- API Key Handling ---
@@ -55,7 +54,7 @@ def load_and_process_data():
         return None, None
 
     combined_knowledge = "\n\n---\n\n".join(knowledge_base_texts)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, overlap=150)
     texts = text_splitter.split_text(combined_knowledge)
     return texts, reviews_df
 
@@ -73,26 +72,45 @@ if texts and reviews_df is not None:
         compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=compression_retriever)
         
-        st.header("Ask a Strategic Question")
+        # --- UPGRADED WEB APP INTERFACE ---
+        st.header("Ask a question related to Hotel Review and Research")
+        
         hotel_list = ["All Hotels"] + reviews_df['Hotel'].unique().tolist()
         selected_hotel = st.selectbox("Select a hotel to analyze:", hotel_list)
-        default_query = "Based on the provided research and customer reviews, what are the top 3 recommendations for improving the premium check-in experience?"
-        user_query = st.text_area("Your Question:", value=default_query, height=150)
+
+        # NEW: Let the user choose between a default or custom query
+        query_option = st.radio(
+            "Choose your query type:",
+            ("Default Check-in Analysis", "Custom Open-ended Query"),
+            horizontal=True
+        )
+
+        default_query_text = "Based on the provided research and customer reviews, what are the detailed improvement recommendations for improving the premium check-in experience? Provide concrete evidence and reasoning."
+        
+        # NEW: Set the text area value based on the user's choice
+        if query_option == "Default Check-in Analysis":
+            user_query = st.text_area("Your Question:", value=default_query_text, height=150)
+        else:
+            user_query = st.text_area("Your Question:", value="", placeholder="e.g., What are the most common complaints about staff attitude?", height=150)
+
 
         if st.button("Generate Strategy", type="primary"):
-            with st.spinner("AI is thinking..."):
-                if selected_hotel == "All Hotels":
-                    relevant_reviews = reviews_df['Review'].tolist()
-                else:
-                    relevant_reviews = reviews_df[reviews_df['Hotel'] == selected_hotel]['Review'].tolist()
-                
-                all_reviews_text = "\n\n---\n\n".join(str(review) for review in relevant_reviews)
-                
-                final_prompt = f"You are a top-tier hospitality strategy consultant. Your Goal: Answer the user's question by synthesizing expert research with real customer feedback for {selected_hotel}. User's Question: {user_query} Supporting Customer Reviews: {all_reviews_text}"
-                
-                result = qa_chain.invoke(final_prompt)
-                st.subheader("AI Strategic Recommendation")
-                st.markdown(result['result'])
+            if not user_query.strip():
+                st.warning("Please enter a question before generating a strategy.")
+            else:
+                with st.spinner("AI is thinking..."):
+                    if selected_hotel == "All Hotels":
+                        relevant_reviews = reviews_df['Review'].tolist()
+                    else:
+                        relevant_reviews = reviews_df[reviews_df['Hotel'] == selected_hotel]['Review'].tolist()
+                    
+                    all_reviews_text = "\n\n---\n\n".join(str(review) for review in relevant_reviews)
+                    
+                    final_prompt = f"You are a top-tier hospitality strategy consultant. Your Goal: Answer the user's question by synthesizing expert research with real customer feedback for {selected_hotel}. User's Question: {user_query} Supporting Customer Reviews: {all_reviews_text}"
+                    
+                    result = qa_chain.invoke(final_prompt)
+                    st.subheader("Strategic Recommendation using gpt-4-turbo")
+                    st.markdown(result['result'])
 
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")
