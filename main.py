@@ -1,3 +1,13 @@
+# --- THE DEFINITIVE SQLITE3 FIX ---
+# This code MUST be at the very top of the file
+try:
+    __import__('pysqlite3')
+    import sys
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+# --- END OF FIX ---
+
 import os
 import pandas as pd
 import pypdf
@@ -15,7 +25,7 @@ st.set_page_config(page_title="Hotel Strategy AI", page_icon="🏨", layout="wid
 st.title("🏨 Premium Hotel Strategy AI")
 st.write("This tool synthesizes expert research and customer reviews to generate strategic recommendations.")
 
-# --- API Key Handling for Sharing ---
+# --- API Key Handling ---
 try:
     os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
 except:
@@ -25,7 +35,6 @@ except:
 @st.cache_data(show_spinner="Loading and processing knowledge base...")
 def load_and_process_data():
     knowledge_base_texts = []
-    # Load research papers
     research_folder = "research"
     if os.path.exists(research_folder):
         for filename in os.listdir(research_folder):
@@ -40,15 +49,13 @@ def load_and_process_data():
                     knowledge_base_texts.append(pdf_text)
                 except Exception: pass
     
-    # Load reviews
     try:
-        # **IMPORTANT**: Make sure your review file is named "reviews.csv"
         reviews_df = pd.read_csv("reviews.csv") 
     except FileNotFoundError:
         return None, None
 
     combined_knowledge = "\n\n---\n\n".join(knowledge_base_texts)
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=150)
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, overlap=150)
     texts = text_splitter.split_text(combined_knowledge)
     return texts, reviews_df
 
@@ -61,13 +68,11 @@ if texts and reviews_df is not None:
         vectorstore = Chroma.from_texts(texts, embeddings)
         llm = ChatOpenAI(model_name="gpt-4-turbo", temperature=0.5)
         
-        # Accurate Retriever
         base_retriever = vectorstore.as_retriever(search_kwargs={"k": 10})
         compressor = LLMChainExtractor.from_llm(llm)
         compression_retriever = ContextualCompressionRetriever(base_compressor=compressor, base_retriever=base_retriever)
         qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=compression_retriever)
         
-        # Web App Interface
         st.header("Ask a Strategic Question")
         hotel_list = ["All Hotels"] + reviews_df['Hotel'].unique().tolist()
         selected_hotel = st.selectbox("Select a hotel to analyze:", hotel_list)
@@ -90,9 +95,6 @@ if texts and reviews_df is not None:
                 st.markdown(result['result'])
 
     except Exception as e:
-        if "api_key" in str(e).lower():
-            st.error("Authentication Error: Could not find the OpenAI API key. Please make sure it is set correctly in the Streamlit app settings under 'Secrets'.")
-        else:
-            st.error(f"An unexpected error occurred: {e}")
+        st.error(f"An unexpected error occurred: {e}")
 else:
     st.error("Error: Could not find 'reviews.csv' or any files in the 'research' folder. Please check your files on GitHub.")
